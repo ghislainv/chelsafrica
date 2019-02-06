@@ -103,6 +103,9 @@ execGRASS("r.out.gdal", flags=c("overwrite"), input="test1_1_30s",
 
 # Plot
 test1 <- raster("gisdata/test1_1_30s.tif")
+pdf("output/test1_1_30s.pdf")
 plot(test1)
+dev.off()
+
 
 # End
