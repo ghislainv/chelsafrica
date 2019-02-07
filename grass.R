@@ -8,7 +8,7 @@
 # ==============================================================================
 
 # Libraries
-list.of.packages = c("rgdal","sp","raster","rgrass7","dataverse","glue")
+list.of.packages = c("rgdal","sp","raster","rgrass7")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages) > 0) {install.packages(new.packages)}
 lapply(list.of.packages, require, character.only=T)
@@ -38,8 +38,7 @@ unzip("data/GAUL/gaul.zip", exdir="data/GAUL")
 # It should be somethin like: "/usr/lib/grass72"
 # On Windows, find the path to GRASS GIS with: C:\>grass72.bat --config path
 # If you use OSGeo4W, it should be: "C:\OSGeo4W\apps\grass\grass-7.2"
-Sys.setenv(LD_LIBRARY_PATH=paste("/usr/lib/grass72/lib", 
-																 Sys.getenv("LD_LIBRARY_PATH"),sep=":"))
+Sys.setenv(LD_LIBRARY_PATH=paste("/usr/lib/grass72/lib", Sys.getenv("LD_LIBRARY_PATH"),sep=":"))
 
 # Initialize GRASS
 initGRASS(gisBase="/usr/lib/grass72",home=tempdir(), 

@@ -2,8 +2,19 @@
 system("v.in.ogr --overwrite input=gisdata/vectors/Africa layer=Africa output=Africa")
 
 # Rasterize Africa at 30 arc-sec resolution
-system("g.region -ap vector=Africa res=0:00:30")
-system("v.to.rast input=Africa type=area output=Africa use=val value=1")
+# First, we look at extent and resolution in decimal degree fro GDAL with -g argument
+system("g.region -apg vector=Africa res=0:00:30")
+# system("v.to.rast -d input=Africa type=area output=Africa use=val value=1")
+# In place of v.to.rast use of gdal_rasterize with -at argument
+system("gdal_rasterize -burn 1 -at -a_nodata 255 \\
+       -te -25.3666666666667 -46.9833333333333 51.4166666666667 37.55 \\
+       -tr 0.00833333333333333 0.00833333333333333 -ot Byte \\
+	   -co 'COMPRESS=LZW' -co 'PREDICTOR=2' \\
+	   gisdata/vectors/Africa/Africa.shp \\
+	   output/Africa.tif")
+# Import with r.in.gdal
+system ("r.in.gdal --overwrite input=output/Africa.tif output=Africa")
+system("g.region -ap raster=Africa")
 
 # Import climate
 system("r.in.gdal --overwrite input=gisdata/rasters/test1.1_044.tif output=test1_1")
@@ -20,7 +31,8 @@ system("g.region -ap res=0:00:30")
 system("r.resample --overwrite input=test1_1_rst output=test1_1_30s")
 
 # Export
-system("r.out.gdal --overwrite input=test1_1_30s \\
+system("r.out.gdal -cm --overwrite input=test1_1_30s \\
+             nodata=-9999 \\
 			 output=output/test1_1_30s.tif type=Float32 \\
 			 createopt='compress=lzw,predictor=2'")
 
