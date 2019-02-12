@@ -57,15 +57,15 @@ system("v.in.ogr --o -o input=data/GAUL/G2013_2012_0.shp output=ctry snap=0.0001
 
 # List of African countries
 list_ctry_Africa <- c("Algeria","Angola","Benin","Botswana","Burkina Faso","Burundi","Cameroon",
-											"Cape Verde","Central African Republic","Chad","Comoros","Congo","Côte d''Ivoire",
-											"Democratic Republic of the Congo","Djibouti","Egypt","Equatorial Guinea",
-											"Eritrea","Ethiopia","Gabon","Gambia","Ghana","Guinea","Guinea-Bissau",
-											"Kenya","Lesotho","Liberia","Libya","Madagascar","Malawi","Mali",
-											"Mauritania","Mayotte","Morocco","Mozambique","Namibia","Niger","Nigeria","Rwanda",
-											"Sao Tome and Principe","Senegal","Sierra Leone","Somalia","South Africa",
-											"Swaziland","Togo","Tunisia","Uganda","United Republic of Tanzania",
-											"Zambia","Zimbabwe","South Sudan","Sudan","Malawi","Western Sahara",
-											"Hala''ib triangle","Ilemi triangle","Ma''tan al-Sarra","Abyei")
+					  "Cape Verde","Central African Republic","Chad","Comoros","Congo","Côte d''Ivoire",
+					  "Democratic Republic of the Congo","Djibouti","Egypt","Equatorial Guinea",
+					  "Eritrea","Ethiopia","Gabon","Gambia","Ghana","Guinea","Guinea-Bissau",
+					  "Kenya","Lesotho","Liberia","Libya","Madagascar","Malawi","Mali",
+					  "Mauritania","Mayotte","Morocco","Mozambique","Namibia","Niger","Nigeria","Rwanda",
+					  "Sao Tome and Principe","Senegal","Sierra Leone","Somalia","South Africa",
+					  "Swaziland","Togo","Tunisia","Uganda","United Republic of Tanzania",
+					  "Zambia","Zimbabwe","South Sudan","Sudan","Malawi","Western Sahara",
+					  "Hala''ib triangle","Ilemi triangle","Ma''tan al-Sarra","Abyei")
 
 ctry_Africa <- paste0("('", paste0(list_ctry_Africa, collapse="','"), "')")
 system(paste0("v.extract --o -d input=ctry where=\"ADM0_NAME IN ",ctry_Africa,"\" output=Africa new=0"))
@@ -95,10 +95,40 @@ system("r.info test1_1_rst")
 system("g.region -ap res=0:00:30")
 system("r.resample --overwrite input=test1_1_rst output=test1_1_30s")
 
-# Export
+# Resample with bicubic and compare
+system("g.region -ap raster=Africa")
+system("r.resamp.interp --overwrite method=bicubic input=test1_1 \\
+	   output=test1_1_interp")
+system("r.mask raster=Africa")
+system("r.mapcalc --o 'test1_1_interp = test1_1_interp'")
+system("r.mask -r")
+
+# Compute diff
+system("r.mapcalc --o 'diff = 100*(test1_1_interp-test1_1_30s)/test1_1_30s'") 
+
+# Export in Float
 execGRASS("r.out.gdal", flags=c("overwrite"), input="test1_1_30s",
-					output="gisdata/test1_1_30s.tif",
-					type="Float32", createopt="compress=lzw,predictor=2")
+		  nodata=-9999,
+		  output="output/test1_1_30s.tif",
+		  type="Float32", createopt="compress=lzw,predictor=2")
+
+# Export in Int
+execGRASS("r.out.gdal", flags=c("overwrite","f"), input="test1_1_30s",
+		  nodata=-9999,
+		  output="output/test1_1_30s.tif",
+		  type="Int32", createopt="compress=lzw,predictor=2")
+
+# Export interp
+execGRASS("r.out.gdal", flags=c("overwrite","f"), input="test1_1_interp",
+		  nodata=-9999,
+		  output="output/test1_1_interp.tif",
+		  type="Float32", createopt="compress=lzw,predictor=2")
+
+# Export diff
+system("r.out.gdal -cmf --overwrite input=diff \\
+       nodata=-9999 \\
+	   output=output/diff.tif type=Int16 \\
+	   createopt='compress=lzw,predictor=2' ")
 
 # Plot
 test1 <- raster("gisdata/test1_1_30s.tif")
@@ -106,5 +136,12 @@ pdf("output/test1_1_30s.pdf")
 plot(test1)
 dev.off()
 
+# Plot difference
+library(rgdal)
+library(raster)
+diff <- raster("output/diff.tif")
+pdf("output/diff.pdf", width=10, height=10)
+plot(diff, main="Differences bicubic/RST")
+dev.off()
 
 # End

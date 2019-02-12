@@ -30,10 +30,16 @@ system("r.info test1_1_rst")
 system("g.region -ap res=0:00:30")
 system("r.resample --overwrite input=test1_1_rst output=test1_1_30s")
 
-# Export
+# Export in Float
 system("r.out.gdal -cm --overwrite input=test1_1_30s \\
              nodata=-9999 \\
 			 output=output/test1_1_30s.tif type=Float32 \\
+			 createopt='compress=lzw,predictor=2'")
+
+# Export in Int
+system("r.out.gdal -cmf --overwrite input=test1_1_30s \\
+             nodata=-9999 \\
+			 output=output/test1_1_30sInt16.tif type=Int16 \\
 			 createopt='compress=lzw,predictor=2'")
 
 # Plot
@@ -41,8 +47,9 @@ Africa <- readOGR("gisdata/vectors/Africa/Africa.shp")
 test_in <- raster("gisdata/rasters/test1.1_044.tif")
 test_in_crop <- crop(test_in, Africa)
 test_in_clip <- mask(test_in_crop, Africa)
-test_out <- raster("output/test1_1_30s.tif")
-pdf("output/test.pdf", width=10, height=5)
+test_out <- raster("output/test1_1_interp.tif") # raster("output/test1_1_30s.tif")
+
+pdf("output/test_interp.pdf", width=10, height=5)
 par(mfrow=c(1,2))
 plot(test_in_clip, main="Original",
 		 xlim=c(-20,60), ylim=c(-40,40))
