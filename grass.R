@@ -8,10 +8,7 @@
 # ==============================================================================
 
 # Libraries
-list.of.packages = c("rgdal","sp","raster","rgrass7")
-new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
-if(length(new.packages) > 0) {install.packages(new.packages)}
-lapply(list.of.packages, require, character.only=T)
+library("rgrass7")
 
 #=================================
 # Download data for country border
@@ -74,19 +71,29 @@ system(paste0("v.extract --o -d input=ctry where=\"ADM0_NAME IN ",ctry_Africa,"\
 system("v.out.ogr --o input=Africa output=data/Africa.shp")
 
 # Rasterize Africa at 30 arc-sec resolution
-system("g.region -ap vector=Africa res=0:00:30")
-system("v.to.rast input=Africa type=area output=Africa use=val value=1")
+# First, we look at extent and resolution in decimal degree for GDAL with -g argument
+system("g.region -apg vector=Africa res=0:00:30")
+# system("v.to.rast -d input=Africa type=area output=Africa use=val value=1")
+# In place of v.to.rast use of gdal_rasterize with -at argument
+system("gdal_rasterize -burn 1 -at -a_nodata 255 \\
+       -te -25.3666666666667 -46.9833333333333 51.4166666666667 37.55 \\
+       -tr 0.00833333333333333 0.00833333333333333 -ot Byte \\
+	   -co 'COMPRESS=LZW' -co 'PREDICTOR=2' \\
+	   gisdata/vectors/Africa/Africa.shp \\
+	   output/Africa.tif")
+# Import with r.in.gdal
+system ("r.in.gdal --overwrite input=output/Africa.tif output=Africa")
+system("g.region -ap raster=Africa")
 
 #=============================================
 # Resample with r.resamp.rst using Africa mask
 
-# Import
-execGRASS("r.in.gdal", flags=c("overwrite"), 
-					input="gisdata/test1.1_044.tif", output="test1_1")
+# Import climate
+system("r.in.gdal --overwrite input=gisdata/rasters/test1.1_044.tif output=test1_1")
 
-# Resample
-execGRASS("g.region", flags=c("a","p"), raster="test1_1")
-# The -t flag should be set to use "dnorm independent tension". 
+# Resample with RST
+system("g.region -ap raster=test1_1")
+# Note: use maskmap=Africa to save computation time
 system("r.resamp.rst --overwrite input=test1_1 elevation=test1_1_rst \\
 			 ew_res=0.00833 ns_res=0.00833 maskmap=Africa")
 system("r.info test1_1_rst")
@@ -95,34 +102,35 @@ system("r.info test1_1_rst")
 system("g.region -ap res=0:00:30")
 system("r.resample --overwrite input=test1_1_rst output=test1_1_30s")
 
-# Resample with bicubic and compare
-system("g.region -ap raster=Africa")
-system("r.resamp.interp --overwrite method=bicubic input=test1_1 \\
-	   output=test1_1_interp")
-system("r.mask raster=Africa")
-system("r.mapcalc --o 'test1_1_interp = test1_1_interp'")
-system("r.mask -r")
-
-# Compute diff
-system("r.mapcalc --o 'diff = 100*(test1_1_interp-test1_1_30s)/test1_1_30s'") 
-
 # Export in Float
 execGRASS("r.out.gdal", flags=c("overwrite"), input="test1_1_30s",
 		  nodata=-9999,
 		  output="output/test1_1_30s.tif",
 		  type="Float32", createopt="compress=lzw,predictor=2")
 
-# Export in Int
-execGRASS("r.out.gdal", flags=c("overwrite","f"), input="test1_1_30s",
-		  nodata=-9999,
-		  output="output/test1_1_30s.tif",
-		  type="Int32", createopt="compress=lzw,predictor=2")
+# # Export in Int
+# execGRASS("r.out.gdal", flags=c("overwrite","f"), input="test1_1_30s",
+# 		  nodata=-9999,
+# 		  output="output/test1_1_30s.tif",
+# 		  type="Int32", createopt="compress=lzw,predictor=2")
+
+# Resample with bicubic and compare
+system("g.region -ap raster=Africa")
+system("r.resamp.interp --overwrite method=bicubic input=test1_1 \\
+	   output=test1_1_interp_")
+system("r.mask raster=Africa")
+system("r.mapcalc --o 'test1_1_interp = test1_1_interp_'")
+system("r.mask -r")
+system("r.info test1_1_interp")
 
 # Export interp
 execGRASS("r.out.gdal", flags=c("overwrite","f"), input="test1_1_interp",
 		  nodata=-9999,
 		  output="output/test1_1_interp.tif",
 		  type="Float32", createopt="compress=lzw,predictor=2")
+
+# Compute diff
+system("r.mapcalc --o 'diff = 100*(test1_1_interp-test1_1_30s)'") 
 
 # Export diff
 system("r.out.gdal -cmf --overwrite input=diff \\
@@ -131,14 +139,36 @@ system("r.out.gdal -cmf --overwrite input=diff \\
 	   createopt='compress=lzw,predictor=2' ")
 
 # Plot
-test1 <- raster("gisdata/test1_1_30s.tif")
-pdf("output/test1_1_30s.pdf")
-plot(test1)
+library(rgdal)
+library(raster)
+Africa <- readOGR("gisdata/vectors/Africa/Africa.shp")
+test_in <- raster("gisdata/rasters/test1.1_044.tif")
+test_in_crop <- crop(test_in, Africa)
+test_in_clip <- mask(test_in_crop, Africa)
+
+# RST
+test_out <- raster("output/test1_1_30s.tif")
+pdf("output/test_rst.pdf", width=10, height=5)
+par(mfrow=c(1,2),mar=c(3,3,4,4))
+plot(test_in_clip, main="Original",
+	 xlim=c(-20,60), ylim=c(-40,40))
+plot(test_out, main="Interpolated rst",
+	 xlim=c(-20,60), ylim=c(-40,40))
+#plot(Africa, add=TRUE, col="transparent")
+dev.off()
+
+# Bicubic
+test_out <- raster("output/test1_1_interp.tif")
+pdf("output/test_interp.pdf", width=10, height=5)
+par(mfrow=c(1,2),mar=c(3,3,4,4))
+plot(test_in_clip, main="Original",
+	 xlim=c(-20,60), ylim=c(-40,40))
+plot(test_out, main="Interpolated bicubic",
+	 xlim=c(-20,60), ylim=c(-40,40))
+#plot(Africa, add=TRUE, col="transparent")
 dev.off()
 
 # Plot difference
-library(rgdal)
-library(raster)
 diff <- raster("output/diff.tif")
 pdf("output/diff.pdf", width=10, height=10)
 plot(diff, main="Differences bicubic/RST")
