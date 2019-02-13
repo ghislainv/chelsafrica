@@ -115,7 +115,7 @@ execGRASS("r.out.gdal", flags=c("overwrite"), input="test1_1_30s",
 # 		  type="Int32", createopt="compress=lzw,predictor=2")
 
 # Resample with bicubic and compare
-system("g.region -ap raster=Africa")
+system("g.region -ap raster=test1_1 res=00:00:30")
 system("r.resamp.interp --overwrite method=bicubic input=test1_1 \\
 	   output=test1_1_interp_")
 system("r.mask raster=Africa")
